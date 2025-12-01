@@ -149,4 +149,3 @@ async def upload_cv(job_id: str = Form(...), file: UploadFile = File(...)):
         "status": "ok",
         "candidate_id": record["id"],
     }
-
