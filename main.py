@@ -1,3 +1,4 @@
+import os
 import fitz  # PyMuPDF
 import requests
 from datetime import datetime
@@ -7,11 +8,27 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # ========= CONFIG =========
 
-AIRTABLE_TOKEN = "patBFA1fDASEFqUbX.9e79e2e4ca92f8c96710ffc5e05c32e748510140af0a827c1209c312c828e79b"
-AIRTABLE_BASE_ID = "appfowJWq52KZuxop"
+AIRTABLE_TOKEN = os.getenv("AIRTABLE_TOKEN")
+AIRTABLE_BASE_ID = os.getenv("AIRTABLE_BASE_ID")
 
 JOBS_TABLE = "Jobs"
 CANDIDATES_TABLE = "Candidates"
+
+if not AIRTABLE_TOKEN or not AIRTABLE_BASE_ID:
+    raise RuntimeError("Les variables d'environnement AIRTABLE_TOKEN et AIRTABLE_BASE_ID doivent être définies.")
+@app.get("/debug-env")
+def debug_env():
+    """
+    Route de debug pour vérifier ce que voit Render.
+    NE L'UTILISE QUE TEMPORAIREMENT.
+    """
+    return {
+        "AIRTABLE_TOKEN_prefix": AIRTABLE_TOKEN[:4] if AIRTABLE_TOKEN else None,
+        "AIRTABLE_TOKEN_len": len(AIRTABLE_TOKEN) if AIRTABLE_TOKEN else None,
+        "AIRTABLE_BASE_ID": AIRTABLE_BASE_ID,
+    }
+
+
 
 # ========= APP FASTAPI =========
 
