@@ -1,10 +1,14 @@
 import os
-import fitz  # PyMuPDF
-import requests
 from datetime import datetime
 
+import fitz  # PyMuPDF
+import requests
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+
+# ========= APP FASTAPI =========
+
+app = FastAPI()
 
 # ========= CONFIG =========
 
@@ -14,8 +18,7 @@ AIRTABLE_BASE_ID = os.getenv("AIRTABLE_BASE_ID")
 JOBS_TABLE = "Jobs"
 CANDIDATES_TABLE = "Candidates"
 
-if not AIRTABLE_TOKEN or not AIRTABLE_BASE_ID:
-    raise RuntimeError("Les variables d'environnement AIRTABLE_TOKEN et AIRTABLE_BASE_ID doivent être définies.")
+
 @app.get("/debug-env")
 def debug_env():
     """
@@ -29,11 +32,6 @@ def debug_env():
     }
 
 
-
-# ========= APP FASTAPI =========
-
-app = FastAPI()
-
 # CORS pour permettre au frontend Vercel d'appeler l'API plus tard
 app.add_middleware(
     CORSMiddleware,
@@ -44,10 +42,20 @@ app.add_middleware(
 )
 
 
+# ========= FONCTIONS UTILITAIRES =========
+
+
 def airtable_create_record(table: str, fields: dict) -> dict:
     """
     Crée un enregistrement dans Airtable.
     """
+    if not AIRTABLE_TOKEN or not AIRTABLE_BASE_ID:
+        # On garde une erreur claire, mais à l'appel de la fonction (pas au import du module)
+        raise RuntimeError(
+            "Les variables d'environnement AIRTABLE_TOKEN et AIRTABLE_BASE_ID "
+            "doivent être définies pour utiliser Airtable."
+        )
+
     url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{table}"
     headers = {
         "Authorization": f"Bearer {AIRTABLE_TOKEN}",
@@ -69,6 +77,9 @@ def extract_text_from_pdf_bytes(file_bytes: bytes) -> str:
         text += page.get_text()
     pdf.close()
     return text
+
+
+# ========= ENDPOINTS =========
 
 
 @app.post("/create-job")
@@ -116,3 +127,4 @@ async def upload_cv(job_id: str = Form(...), file: UploadFile = File(...)):
         "status": "ok",
         "candidate_id": record["id"],
     }
+
