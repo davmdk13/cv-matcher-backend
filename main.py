@@ -5,6 +5,7 @@ import fitz  # PyMuPDF
 import requests
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import HTTPException
 
 # ========= APP FASTAPI =========
 
@@ -150,3 +151,59 @@ async def upload_cv(job_id: str = Form(...), file: UploadFile = File(...)):
         "status": "ok",
         "candidate_id": record["id"],
     }
+
+@app.get("/results")
+def get_results(job_id: str):
+    """
+    Retourne la liste des candidats pour un job_id donné,
+    avec score, décision, etc.
+    """
+    if not job_id:
+        raise HTTPException(status_code=400, detail="job_id is required")
+
+    url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{CANDIDATES_TABLE}"
+    headers = {
+        "Authorization": f"Bearer {AIRTABLE_TOKEN}",
+    }
+
+    params = {
+        "filterByFormula": f'{{job_id}} = "{job_id}"',
+        "pageSize": 100,
+    }
+
+    candidates = []
+    offset = None
+
+    while True:
+        if offset:
+            params["offset"] = offset
+
+        r = requests.get(url, headers=headers, params=params)
+        r.raise_for_status()
+        data = r.json()
+
+        for rec in data.get("records", []):
+            fields = rec.get("fields", {})
+            candidates.append({
+                "id": rec.get("id"),
+                "file_name": fields.get("file_name"),
+                "score": fields.get("score"),
+                "decision": fields.get("decision"),
+                "analysis_status": fields.get("analysis_status"),
+                "analysis_explanation": fields.get("analysis_explanation"),
+            })
+
+        offset = data.get("offset")
+        if not offset:
+            break
+
+    # On garde ceux qui sont vraiment analysés
+    done = [
+        c for c in candidates
+        if c.get("analysis_status") == "done" and c.get("score") is not None
+    ]
+
+    # On les trie par score décroissant
+    done.sort(key=lambda c: c.get("score", 0), reverse=True)
+
+    return {"candidates": done}
