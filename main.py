@@ -19,16 +19,19 @@ JOBS_TABLE = "Jobs"
 CANDIDATES_TABLE = "Candidates"
 
 
-@app.get("/debug-env")
-def debug_env():
+@app.get("/debug-airtable")
+def debug_airtable():
     """
-    Route de debug pour vérifier ce que voit Render.
-    NE L'UTILISE QUE TEMPORAIREMENT.
+    Teste le token Airtable utilisé par Render en appelant l'endpoint /meta/whoami.
     """
+    url = "https://api.airtable.com/v0/meta/whoami"
+    headers = {
+        "Authorization": f"Bearer {AIRTABLE_TOKEN}",
+    }
+    r = requests.get(url, headers=headers)
     return {
-        "AIRTABLE_TOKEN_prefix": AIRTABLE_TOKEN[:4] if AIRTABLE_TOKEN else None,
-        "AIRTABLE_TOKEN_len": len(AIRTABLE_TOKEN) if AIRTABLE_TOKEN else None,
-        "AIRTABLE_BASE_ID": AIRTABLE_BASE_ID,
+        "status_code": r.status_code,
+        "body": r.json() if r.headers.get("Content-Type", "").startswith("application/json") else r.text,
     }
 
 
