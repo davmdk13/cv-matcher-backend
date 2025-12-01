@@ -19,6 +19,21 @@ JOBS_TABLE = "Jobs"
 CANDIDATES_TABLE = "Candidates"
 
 
+# ========= ROUTES DE DEBUG =========
+
+@app.get("/debug-env")
+def debug_env():
+    """
+    Route de debug pour vérifier ce que voit Render.
+    NE L'UTILISE QUE TEMPORAIREMENT.
+    """
+    return {
+        "AIRTABLE_TOKEN_prefix": AIRTABLE_TOKEN[:4] if AIRTABLE_TOKEN else None,
+        "AIRTABLE_TOKEN_len": len(AIRTABLE_TOKEN) if AIRTABLE_TOKEN else None,
+        "AIRTABLE_BASE_ID": AIRTABLE_BASE_ID,
+    }
+
+
 @app.get("/debug-airtable")
 def debug_airtable():
     """
@@ -29,13 +44,16 @@ def debug_airtable():
         "Authorization": f"Bearer {AIRTABLE_TOKEN}",
     }
     r = requests.get(url, headers=headers)
+    content_type = r.headers.get("Content-Type", "")
+
     return {
         "status_code": r.status_code,
-        "body": r.json() if r.headers.get("Content-Type", "").startswith("application/json") else r.text,
+        "body": r.json() if content_type.startswith("application/json") else r.text,
     }
 
 
-# CORS pour permettre au frontend Vercel d'appeler l'API plus tard
+# ========= CORS =========
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -47,13 +65,11 @@ app.add_middleware(
 
 # ========= FONCTIONS UTILITAIRES =========
 
-
 def airtable_create_record(table: str, fields: dict) -> dict:
     """
     Crée un enregistrement dans Airtable.
     """
     if not AIRTABLE_TOKEN or not AIRTABLE_BASE_ID:
-        # On garde une erreur claire, mais à l'appel de la fonction (pas au import du module)
         raise RuntimeError(
             "Les variables d'environnement AIRTABLE_TOKEN et AIRTABLE_BASE_ID "
             "doivent être définies pour utiliser Airtable."
@@ -66,7 +82,11 @@ def airtable_create_record(table: str, fields: dict) -> dict:
     }
     payload = {"fields": fields}
     r = requests.post(url, json=payload, headers=headers)
-    r.raise_for_status()
+
+    if not r.ok:
+        print("Airtable error:", r.status_code, r.text)
+        raise RuntimeError(f"Airtable error {r.status_code}: {r.text}")
+
     return r.json()
 
 
@@ -82,8 +102,7 @@ def extract_text_from_pdf_bytes(file_bytes: bytes) -> str:
     return text
 
 
-# ========= ENDPOINTS =========
-
+# ========= ENDPOINTS MÉTIER =========
 
 @app.post("/create-job")
 async def create_job(title: str = Form(...), description: str = Form(...)):
