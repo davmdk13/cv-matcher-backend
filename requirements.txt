@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+pymupdf
+requests
+python-multipart
+
