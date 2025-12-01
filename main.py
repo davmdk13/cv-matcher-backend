@@ -105,7 +105,9 @@ def extract_text_from_pdf_bytes(file_bytes: bytes) -> str:
 # ========= ENDPOINTS MÉTIER =========
 
 @app.post("/create-job")
-async def create_job(title: str = Form(...), description: str = Form(...)):
+async def create_job(
+    title: str = Form(None), 
+    description: str = Form(...)):
     """
     Crée un job dans Airtable.
     """
@@ -115,7 +117,6 @@ async def create_job(title: str = Form(...), description: str = Form(...)):
         JOBS_TABLE,
         {
             "job_id": job_id,
-            "title": title,
             "description_raw": description,
         },
     )
