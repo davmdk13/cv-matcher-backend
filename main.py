@@ -296,18 +296,11 @@ def get_results(job_id: str):
         offset = data.get("offset")
         if not offset:
             break
+# On ne filtre plus ici, on renvoie vraiment tous les candidats
+# (pending et done)
+candidates.sort(key=lambda c: (c.get("score") or 0), reverse=True)
 
-    # On garde ceux qui sont vraiment analysés
-    done = [
-        c
-        for c in candidates
-        if c.get("analysis_status") == "done" and c.get("score") is not None
-    ]
-
-    # On les trie par score décroissant
-    done.sort(key=lambda c: c.get("score", 0), reverse=True)
-
-    return {"candidates": done}
+return {"candidates": candidates}
 
 
 # ========= UPDATE DECISION =========
