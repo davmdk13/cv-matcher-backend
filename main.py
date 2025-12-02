@@ -6,6 +6,7 @@ import requests
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import HTTPException
+from pydantic import BaseModel  # 👈 ajouté pour le modèle de requête
 
 # ========= APP FASTAPI =========
 
@@ -66,15 +67,19 @@ app.add_middleware(
 
 # ========= FONCTIONS UTILITAIRES =========
 
-def airtable_create_record(table: str, fields: dict) -> dict:
-    """
-    Crée un enregistrement dans Airtable.
-    """
+def _check_airtable_env():
     if not AIRTABLE_TOKEN or not AIRTABLE_BASE_ID:
         raise RuntimeError(
             "Les variables d'environnement AIRTABLE_TOKEN et AIRTABLE_BASE_ID "
             "doivent être définies pour utiliser Airtable."
         )
+
+
+def airtable_create_record(table: str, fields: dict) -> dict:
+    """
+    Crée un enregistrement dans Airtable.
+    """
+    _check_airtable_env()
 
     url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{table}"
     headers = {
@@ -86,6 +91,27 @@ def airtable_create_record(table: str, fields: dict) -> dict:
 
     if not r.ok:
         print("Airtable error:", r.status_code, r.text)
+        raise RuntimeError(f"Airtable error {r.status_code}: {r.text}")
+
+    return r.json()
+
+
+def airtable_update_record(table: str, record_id: str, fields: dict) -> dict:
+    """
+    Met à jour un enregistrement dans Airtable (PATCH).
+    """
+    _check_airtable_env()
+
+    url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{table}/{record_id}"
+    headers = {
+        "Authorization": f"Bearer {AIRTABLE_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {"fields": fields}
+    r = requests.patch(url, json=payload, headers=headers)
+
+    if not r.ok:
+        print("Airtable update error:", r.status_code, r.text)
         raise RuntimeError(f"Airtable error {r.status_code}: {r.text}")
 
     return r.json()
@@ -107,8 +133,9 @@ def extract_text_from_pdf_bytes(file_bytes: bytes) -> str:
 
 @app.post("/create-job")
 async def create_job(
-    title: str = Form(None), 
-    description: str = Form(...)):
+    title: str = Form(None),
+    description: str = Form(...),
+):
     """
     Crée un job dans Airtable.
     """
@@ -152,6 +179,7 @@ async def upload_cv(job_id: str = Form(...), file: UploadFile = File(...)):
         "candidate_id": record["id"],
     }
 
+
 @app.get("/results")
 def get_results(job_id: str):
     """
@@ -160,6 +188,8 @@ def get_results(job_id: str):
     """
     if not job_id:
         raise HTTPException(status_code=400, detail="job_id is required")
+
+    _check_airtable_env()
 
     url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{CANDIDATES_TABLE}"
     headers = {
@@ -184,14 +214,16 @@ def get_results(job_id: str):
 
         for rec in data.get("records", []):
             fields = rec.get("fields", {})
-            candidates.append({
-                "id": rec.get("id"),
-                "file_name": fields.get("file_name"),
-                "score": fields.get("score"),
-                "decision": fields.get("decision"),
-                "analysis_status": fields.get("analysis_status"),
-                "analysis_explanation": fields.get("analysis_explanation"),
-            })
+            candidates.append(
+                {
+                    "id": rec.get("id"),
+                    "file_name": fields.get("file_name"),
+                    "score": fields.get("score"),
+                    "decision": fields.get("decision"),
+                    "analysis_status": fields.get("analysis_status"),
+                    "analysis_explanation": fields.get("analysis_explanation"),
+                }
+            )
 
         offset = data.get("offset")
         if not offset:
@@ -199,7 +231,8 @@ def get_results(job_id: str):
 
     # On garde ceux qui sont vraiment analysés
     done = [
-        c for c in candidates
+        c
+        for c in candidates
         if c.get("analysis_status") == "done" and c.get("score") is not None
     ]
 
@@ -207,3 +240,38 @@ def get_results(job_id: str):
     done.sort(key=lambda c: c.get("score", 0), reverse=True)
 
     return {"candidates": done}
+
+
+# ========= UPDATE DECISION =========
+
+class UpdateDecisionPayload(BaseModel):
+  candidate_id: str
+  decision: str  # "yes" ou "no" côté front
+
+
+@app.post("/update-decision")
+def update_decision(payload: UpdateDecisionPayload):
+    """
+    Met à jour la décision d'un candidat dans Airtable.
+    candidate_id = record.id dans la table Candidates
+    decision = "yes" ou "no" (côté front)
+    """
+    if payload.decision not in ["yes", "no"]:
+        raise HTTPException(
+            status_code=400,
+            detail="decision must be 'yes' or 'no'",
+        )
+
+    # Si dans Airtable tu veux enregistrer "OUI"/"NON", adapte ici :
+    airtable_value = "OUI" if payload.decision == "yes" else "NON"
+
+    try:
+        record = airtable_update_record(
+            CANDIDATES_TABLE,
+            payload.candidate_id,
+            {"decision": airtable_value},
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {"status": "ok", "airtable_id": record.get("id")}
