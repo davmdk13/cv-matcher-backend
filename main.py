@@ -6,7 +6,8 @@ import requests
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import HTTPException
-from pydantic import BaseModel  # 👈 ajouté pour le modèle de requête
+from pydantic import BaseModel 
+import httpx
 
 # ========= APP FASTAPI =========
 
@@ -19,6 +20,36 @@ AIRTABLE_BASE_ID = os.getenv("AIRTABLE_BASE_ID")
 
 JOBS_TABLE = "Jobs"
 CANDIDATES_TABLE = "Candidates"
+
+MAKE_WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL")
+
+class TriggerAnalysisPayload(BaseModel):
+    job_id: str
+
+@app.post("/trigger-analysis")
+async def trigger_analysis(payload: TriggerAnalysisPayload):
+    if not MAKE_WEBHOOK_URL:
+        raise HTTPException(
+            status_code=500,
+            detail="MAKE_WEBHOOK_URL is not configured on the server.",
+        )
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                MAKE_WEBHOOK_URL,
+                json={"job_id": payload.job_id},
+            )
+        resp.raise_for_status()
+    except Exception as e:
+        # Log pour Render
+        print("Error calling Make webhook:", e)
+        raise HTTPException(
+            status_code=502,
+            detail="Error while calling Make webhook.",
+        )
+
+    return {"status": "ok"}
 
 
 # ========= ROUTES DE DEBUG =========
