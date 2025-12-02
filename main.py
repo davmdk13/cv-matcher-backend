@@ -33,12 +33,49 @@ async def trigger_analysis(payload: TriggerAnalysisPayload):
             status_code=500,
             detail="MAKE_WEBHOOK_URL is not configured on the server.",
         )
+    # 1️⃣ Récupérer la description du job dans Airtable
+    _check_airtable_env()
 
+    url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{JOBS_TABLE}"
+    headers = {
+        "Authorization": f"Bearer {AIRTABLE_TOKEN}",
+    }
+    params = {
+        "filterByFormula": f'{{job_id}} = "{payload.job_id}"',
+        "pageSize": 1,
+    }
+
+    try:
+        r = requests.get(url, headers=headers, params=params)
+        r.raise_for_status()
+        data = r.json()
+    except Exception as e:
+        print("Error fetching job from Airtable:", e)
+        raise HTTPException(
+            status_code=502,
+            detail="Error while fetching job from Airtable.",
+        )
+
+    records = data.get("records", [])
+    if not records:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No job found in Airtable for job_id={payload.job_id}",
+        )
+
+    job_fields = records[0].get("fields", {})
+    description_raw = job_fields.get("description_raw", "")
+
+    # 2️⃣ Appeler le webhook Make avec job_id + description_raw
+    
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 MAKE_WEBHOOK_URL,
-                json={"job_id": payload.job_id},
+                json={
+                    "job_id": payload.job_id,
+                    "description_raw": description_raw,
+                },
             )
         resp.raise_for_status()
     except Exception as e:
