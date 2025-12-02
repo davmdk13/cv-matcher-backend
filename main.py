@@ -286,12 +286,16 @@ def get_results(job_id: str):
                 {
                     "id": rec.get("id"),
                     "file_name": fields.get("file_name"),
+                    "name": fields.get("name"),       
+                    "email": fields.get("email"),     
+                    "phone": fields.get("phone"),     
                     "score": fields.get("score"),
                     "decision": fields.get("decision"),
                     "analysis_status": fields.get("analysis_status"),
                     "analysis_explanation": fields.get("analysis_explanation"),
                 }
             )
+
 
         offset = data.get("offset")
         if not offset:
