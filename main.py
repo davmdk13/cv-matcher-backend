@@ -247,7 +247,6 @@ async def upload_cv(job_id: str = Form(...), file: UploadFile = File(...)):
         "candidate_id": record["id"],
     }
 
-
 @app.get("/results")
 def get_results(job_id: str):
     """
@@ -286,9 +285,10 @@ def get_results(job_id: str):
                 {
                     "id": rec.get("id"),
                     "file_name": fields.get("file_name"),
-                    "name": fields.get("name"),       
-                    "email": fields.get("email"),     
-                    "phone": fields.get("phone"),     
+                    # 👇 on expose bien les champs Airtable vers le front
+                    "name": fields.get("name"),
+                    "email": fields.get("email"),
+                    "phone": fields.get("phone"),
                     "score": fields.get("score"),
                     "decision": fields.get("decision"),
                     "analysis_status": fields.get("analysis_status"),
@@ -296,15 +296,15 @@ def get_results(job_id: str):
                 }
             )
 
-
         offset = data.get("offset")
         if not offset:
             break
-# On ne filtre plus ici, on renvoie vraiment tous les candidats
-# (pending et done)
-candidates.sort(key=lambda c: (c.get("score") or 0), reverse=True)
 
-return {"candidates": candidates}
+    # On renvoie tous les candidats de ce job, triés par score décroissant
+    candidates.sort(key=lambda c: (c.get("score") or 0), reverse=True)
+
+    return {"candidates": candidates}
+
 
 
 # ========= UPDATE DECISION =========
